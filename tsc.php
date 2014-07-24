@@ -24,7 +24,7 @@ register_post_type('cp_synonyms', array(
 //'supports' => array('title','editor','Основной_термин','revisions','custom-fields','page-attributes','post-formats'),
 'supports' => array('title','Основной_термин','revisions','page-attributes'),
 //'taxonomies' => array('post_tag','category','pro_category','type_product'),
-'taxonomies' => get_taxonomies(array('query_var' => 'hidden=false')),
+'taxonomies' => get_taxonomies(),
 'labels' => array (
   'name' => 'Синонимы',
   'singular_name' => 'Synonym',
