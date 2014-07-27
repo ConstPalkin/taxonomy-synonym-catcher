@@ -3,12 +3,12 @@
 Plugin Name: Casepress taxonomy synonyms catcher
 Description: Casepress taxonomy synonyms catcher
 Author: ConstPalkin
-Version: 1.0.0
+Version: 1.0.1
 Author URI: http://casepress.org/
 */
 
 // -------------------------------------------регистрация нового типа поста - Синонимы
-$catcher_version = '1.0.0';
+$catcher_version = '1.0.1';
 add_action('init', 'cptui_register_my_cpt_tsc');
 function cptui_register_my_cpt_tsc() {
 register_post_type('cp_synonyms', array(
@@ -47,12 +47,11 @@ register_post_type('cp_synonyms', array(
 //формирование Селекта
 add_action('add_meta_boxes', 'meta_init'); 
 function meta_init() { 
-	add_meta_box('metabox1', 'Основной термин', 'meta_showup', 'cp_synonyms', 'advanced', 'high'); 
+	add_meta_box('metabox_catcher', 'Основной термин', 'meta_showup', 'cp_synonyms', 'advanced', 'high'); 
 } 
 function meta_showup($post, $box) { 
-	$data = get_post_meta($post->ID, '_meta_data', true); 
-	wp_nonce_field('meta_action', 'meta_nonce'); 
-	//echo '<p>Основной термин: <input type="text" name="meta_field" value="' . esc_attr($data) . '"/></p>'; 
+	$data = get_post_meta($post->ID, '_meta_data_syn', true); 
+	wp_nonce_field('meta_action_syn', 'meta_nonce_syn'); 
 	$args1 = array(
 		'show_option_all'    => '',
 		'show_option_none'   => '',
@@ -66,7 +65,7 @@ function meta_showup($post, $box) {
 		'echo'               => 1,
 		'selected'           => esc_attr($data),
 		'hierarchical'       => 0,
-		'name'               => 'meta_field',
+		'name'               => 'meta_field_syn',
 		'id'                 => 'name',
 		'class'              => 'postform',
 		'depth'              => 0,
@@ -84,7 +83,7 @@ add_action('save_post', 'meta_save');
 function meta_save($postID) { 
 
 	// пришло ли поле наших данных? 
-	if (!isset($_POST['meta_field'])) 
+	if (!isset($_POST['meta_field_syn'])) 
 	return; 
 	
 	// не происходит ли автосохранение? 
@@ -96,13 +95,13 @@ function meta_save($postID) {
 	return; 
 	
 	// проверка достоверности запроса 
-	check_admin_referer('meta_action', 'meta_nonce'); 
+	check_admin_referer('meta_action_syn', 'meta_nonce_syn'); 
 	
 	// коррекция данных 
-	$data = sanitize_text_field($_POST['meta_field']); 
+	$data = sanitize_text_field($_POST['meta_field_syn']); 
 	
 	// запись 
-	update_post_meta($postID, '_meta_data', $data); 
+	update_post_meta($postID, '_meta_data_syn', $data); 
 
 } 
 //---------------------------------------------------- экшн
@@ -116,7 +115,7 @@ function make_s_dictionary() {
 	foreach ($s_posts as $s_post) {
 		$s_categories = get_the_category($s_post->ID);
 		//$s_main_term = get_the_category_by_ID(get_post_meta($s_post->ID, '_meta_data', true)); 
-		$s_main_term = get_post_meta($s_post->ID, '_meta_data', true); 
+		$s_main_term = get_post_meta($s_post->ID, '_meta_data_syn', true); 
 		foreach($s_categories as $s_category) {
 			$s_dict[$s_category->cat_ID] = $s_main_term;
 		}
@@ -156,13 +155,14 @@ function tsc_settings() {
 		<h4><i>Используйте с аккуратностью, осознавая то, что делаете (будьте уверены в постах-синонимах).</i></h4>
 		<p>
 			<form action="<?php echo $_SERVER['REQUEST_URI']?>" method="POST">
+				<?php wp_nonce_field('meta_action_syn1', 'meta_nonce_syn1'); ?>
 				<input type="submit" name="tsc_apply" value="массово задействовать" onClick="return confirm('Проверили соответствие постов-синонимов?');" />
 			</form>
 		</p>
 	</div>
 	<?php
 	//перебираем все посты, применяем к ним заменялку рубрик
-	if (isset($_POST['tsc_apply'])) {
+	if (isset($_POST['tsc_apply']) && check_admin_referer('meta_action_syn1', 'meta_nonce_syn1')) {
 		$posts = get_posts(array('post_type'=>'post','nopaging'=>true,'post_status '=>'any'));
 		foreach($posts as $post) {
 			new_tax_save($post->ID);
