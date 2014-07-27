@@ -3,11 +3,12 @@
 Plugin Name: Casepress taxonomy synonyms catcher
 Description: Casepress taxonomy synonyms catcher
 Author: ConstPalkin
-Version: 0.0.1
+Version: 1.0.0
 Author URI: http://casepress.org/
 */
 
-// регистрация нового типа поста - Синонимы
+// -------------------------------------------регистрация нового типа поста - Синонимы
+$catcher_version = '1.0.0';
 add_action('init', 'cptui_register_my_cpt_tsc');
 function cptui_register_my_cpt_tsc() {
 register_post_type('cp_synonyms', array(
@@ -22,7 +23,7 @@ register_post_type('cp_synonyms', array(
 'rewrite' => array('slug' => 'cp_synonyms', 'with_front' => true),
 'query_var' => true,
 //'supports' => array('title','editor','Основной_термин','revisions','custom-fields','page-attributes','post-formats'),
-'supports' => array('title','Основной_термин','revisions','page-attributes'),
+'supports' => array('title','Основной_термин','revisions','page-attributes','category'),
 //'taxonomies' => array('post_tag','category','pro_category','type_product'),
 'taxonomies' => get_taxonomies(),
 'labels' => array (
@@ -59,7 +60,7 @@ function meta_showup($post, $box) {
 		'order'              => 'ASC',
 		'show_last_update'   => 0,
 		'show_count'         => 0,
-		'hide_empty'         => 1,
+		'hide_empty'         => 0,
 		'child_of'           => 0,
 		'exclude'            => '',
 		'echo'               => 1,
@@ -73,7 +74,7 @@ function meta_showup($post, $box) {
 		'taxonomy'           => 'category',
 		'hide_if_empty'      => false
 	); 
-	echo '<p>Значение';
+	echo '<p>Значение: ';
 	wp_dropdown_categories( $args1 );
 	echo '</p>';
 } 
@@ -104,8 +105,70 @@ function meta_save($postID) {
 	update_post_meta($postID, '_meta_data', $data); 
 
 } 
+//---------------------------------------------------- экшн
 
+//берем все посты типа СИНОНИМ
+//составляем словарь соответствий
+//составляем из всех словарей один
+function make_s_dictionary() {
+	$s_posts = get_posts(array('post_type'=>'cp_synonyms','nopaging'=>true,'post_status '=>'any'));
+	$s_dict = array();
+	foreach ($s_posts as $s_post) {
+		$s_categories = get_the_category($s_post->ID);
+		//$s_main_term = get_the_category_by_ID(get_post_meta($s_post->ID, '_meta_data', true)); 
+		$s_main_term = get_post_meta($s_post->ID, '_meta_data', true); 
+		foreach($s_categories as $s_category) {
+			$s_dict[$s_category->cat_ID] = $s_main_term;
+		}
+	}
+	return $s_dict;
+}
+//при сохранениии поста проверяем все категории по словарю
+function new_tax_save($post_id) { 
+	if ('cp_synonyms' != get_post_type($post_id)) { // предостерегаем от мазохизма
+		if ($syn_dict = make_s_dictionary()) {
+			$categories = get_the_category($post_id);
+			$add_category = array();
+			foreach($categories as $category) {
+				if(array_key_exists($category->cat_ID, $syn_dict)) { //если есть совпадение - добавляем новую
+					$add_category[] = $syn_dict[$category->cat_ID];
+				} else { //если нет - оставляем категорию как есть - в составе категорий
+					$add_category[] = $category->cat_ID;
+				}
+			}
+			//вставляем список категорий с заменой предыдущих (false)	
+			if ($uniq_arr = array_unique($add_category)) wp_set_post_categories($post_id, $uniq_arr);
+		}
+	}
+} add_action('save_post', 'new_tax_save'); 
 
+// кнопочка в админ-панели для обновления всех рубрик
+add_action( 'admin_menu', 'tsc_plugin_menu' );
+function tsc_plugin_menu() {
+	add_menu_page( 'Taxonomy Synonyms Catcher', 'TSC', 'manage_options', 'tsc_main_menu', 'tsc_settings' );
+}
+function tsc_settings() {
+	global $catcher_version;
+	?>
+	<div class="wrap">
+		<h2>Taxonomy Synonyms Catcher plugin (ver. <?php echo $catcher_version; ?>)</h2>
+		<h3>Ловец синонимов таксономий</h3>
+		<h4><i>Используйте с аккуратностью, осознавая то, что делаете (будьте уверены в постах-синонимах).</i></h4>
+		<p>
+			<form action="<?php echo $_SERVER['REQUEST_URI']?>" method="POST">
+				<input type="submit" name="tsc_apply" value="массово задействовать" onClick="return confirm('Проверили соответствие постов-синонимов?');" />
+			</form>
+		</p>
+	</div>
+	<?php
+	//перебираем все посты, применяем к ним заменялку рубрик
+	if (isset($_POST['tsc_apply'])) {
+		$posts = get_posts(array('post_type'=>'post','nopaging'=>true,'post_status '=>'any'));
+		foreach($posts as $post) {
+			new_tax_save($post->ID);
+		}
+	}
+}
 
 
 
