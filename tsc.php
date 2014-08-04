@@ -3,12 +3,12 @@
 Plugin Name: Casepress taxonomy synonyms catcher
 Description: Casepress taxonomy synonyms catcher
 Author: ConstPalkin
-Version: 1.0.1
+Version: 1.1.0
 Author URI: http://casepress.org/
 */
 
 // -------------------------------------------регистрация нового типа поста - Синонимы
-$catcher_version = '1.0.1';
+$catcher_version = '1.1.0';
 add_action('init', 'cptui_register_my_cpt_tsc');
 function cptui_register_my_cpt_tsc() {
 register_post_type('cp_synonyms', array(
@@ -23,7 +23,7 @@ register_post_type('cp_synonyms', array(
 'rewrite' => array('slug' => 'cp_synonyms', 'with_front' => true),
 'query_var' => true,
 //'supports' => array('title','editor','Основной_термин','revisions','custom-fields','page-attributes','post-formats'),
-'supports' => array('title','Основной_термин','revisions','page-attributes','category'),
+'supports' => array('title','Основной_термин','page-attributes','category'),
 //'taxonomies' => array('post_tag','category','pro_category','type_product'),
 'taxonomies' => get_taxonomies(),
 'labels' => array (
@@ -51,7 +51,14 @@ function meta_init() {
 } 
 function meta_showup($post, $box) { 
 	$data = get_post_meta($post->ID, '_meta_data_syn', true); 
+	if ($data) {
+		list($data_id,$data_tax) = explode(":", esc_attr($data), 2);
+	} else {
+		$data_id = '';
+		$data_tax = '';
+	}
 	wp_nonce_field('meta_action_syn', 'meta_nonce_syn'); 
+/*
 	$args1 = array(
 		'show_option_all'    => '',
 		'show_option_none'   => '',
@@ -76,6 +83,54 @@ function meta_showup($post, $box) {
 	echo '<p>Значение: ';
 	wp_dropdown_categories( $args1 );
 	echo '</p>';
+*/
+?>
+<select id="selecttaxterm" name="meta_field_syn" class="postform">
+		    <option value="0"><?php _e('--Выберите термин--'); ?></option>
+	        <?php
+
+						  $argsTax=array(
+                                'public'   => true,
+                                '_builtin' => false
+                            );
+
+						  $output = 'objects';
+                          $operator = 'or';
+
+						  $argsTerm = array(
+                               'number' 		=> 0,
+                               'offset' 		=> 0,
+                               'orderby' 		=> 'name',
+                               'order' 		    => 'ASC',
+                               'hide_empty' 	=> false,
+                               'fields' 		=> 'all',
+                               'slug' 		    => '',
+                               'hierarchical'   => false,
+                               'name__like' 	=> '',
+                               'pad_counts' 	=> false,
+                               'get' 			=> '',
+                               'child_of' 	    => 0,
+                               'parent' 		=> '',
+                            );
+                           
+
+                          $taxonomies=get_taxonomies($argsTax,$output,$operator);
+
+						  if  ($taxonomies) {
+				              foreach ($taxonomies as $taxonomy ) {
+                                  echo '<optgroup class="'.$taxonomy->name.'" label="'.$taxonomy->label.'">';
+						          $myterms = get_terms($taxonomy->name, $argsTerm);
+								  if ($myterms) {
+								      foreach ($myterms as $term){
+										  $sel = ($data_id == $term->term_id) ? ' selected="selected"' : '';
+                                          echo '<option class="'.$term->taxonomy.'" value="'.$term->term_id.':'.$term->taxonomy.'"'.$sel.'>'.$term->name.'</option>';
+                                        } 
+							        }
+                                }
+						    }			       
+					   ?> 
+	    </select>
+<?php
 } 
 
 //сохранение мета тегов при сохранениии поста
@@ -113,30 +168,38 @@ function make_s_dictionary() {
 	$s_posts = get_posts(array('post_type'=>'cp_synonyms','nopaging'=>true,'post_status '=>'any'));
 	$s_dict = array();
 	foreach ($s_posts as $s_post) {
-		$s_categories = get_the_category($s_post->ID);
-		//$s_main_term = get_the_category_by_ID(get_post_meta($s_post->ID, '_meta_data', true)); 
+		// надо взять таксономию главного термина и в словарь засовывать синонимы только этой таксономии
 		$s_main_term = get_post_meta($s_post->ID, '_meta_data_syn', true); 
-		foreach($s_categories as $s_category) {
-			$s_dict[$s_category->cat_ID] = $s_main_term;
+		list($s_main_term_id,$s_main_term_taxonomy) = explode(":", $s_main_term, 2);
+		$s_terms = get_the_terms($s_post->ID, $s_main_term_taxonomy);
+		foreach($s_terms as $s_term) {
+			$s_dict[$s_term->term_id] = array($s_main_term_id, $s_main_term_taxonomy);
 		}
 	}
 	return $s_dict;
 }
-//при сохранениии поста проверяем все категории по словарю
+//при сохранениии поста проверяем все таксономии по словарю
 function new_tax_save($post_id) { 
 	if ('cp_synonyms' != get_post_type($post_id)) { // предостерегаем от мазохизма
 		if ($syn_dict = make_s_dictionary()) {
-			$categories = get_the_category($post_id);
-			$add_category = array();
-			foreach($categories as $category) {
-				if(array_key_exists($category->cat_ID, $syn_dict)) { //если есть совпадение - добавляем новую
-					$add_category[] = $syn_dict[$category->cat_ID];
+			$s_terms = get_the_terms($post_id, get_taxonomies(array('public'=>true,'_builtin' => false),'names','or'));
+			$add_term = array();
+			foreach($s_terms as $s_term) {
+				if(array_key_exists($s_term->term_id, $syn_dict)) { //если есть совпадение - добавляем новую
+					$t_id = $syn_dict[$s_term->term_id][0];
+					$t_tax = $syn_dict[$s_term->term_id][1];
 				} else { //если нет - оставляем категорию как есть - в составе категорий
-					$add_category[] = $category->cat_ID;
+					$t_id = $s_term->term_id;
+					$t_tax = $s_term->taxonomy;
 				}
+				if (!array_key_exists($t_tax, $add_term)) $add_term[$t_tax] = array();
+				settype($t_id, "integer");
+				$add_term[$t_tax][] = $t_id;
 			}
 			//вставляем список категорий с заменой предыдущих (false)	
-			if ($uniq_arr = array_unique($add_category)) wp_set_post_categories($post_id, $uniq_arr);
+			foreach ($add_term AS $a_term_name => $a_term) {
+				 wp_set_post_terms($post_id, $a_term, $a_term_name);
+			}
 		}
 	}
 } add_action('save_post', 'new_tax_save'); 
