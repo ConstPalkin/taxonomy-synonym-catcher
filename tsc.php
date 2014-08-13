@@ -3,12 +3,12 @@
 Plugin Name: Casepress taxonomy synonyms catcher
 Description: Casepress taxonomy synonyms catcher
 Author: ConstPalkin
-Version: 1.1.0
+Version: 1.1.3
 Author URI: http://casepress.org/
 */
 
 // -------------------------------------------регистрация нового типа поста - Синонимы
-$catcher_version = '1.1.0';
+$catcher_version = '1.1.3';
 add_action('init', 'cptui_register_my_cpt_tsc');
 function cptui_register_my_cpt_tsc() {
 register_post_type('cp_synonyms', array(
@@ -88,12 +88,13 @@ function meta_showup($post, $box) {
 <select id="selecttaxterm" name="meta_field_syn" class="postform">
 		    <option value="0"><?php _e('--Выберите термин--'); ?></option>
 	        <?php
-
+						
 						  $argsTax=array(
                                 'public'   => true,
                                 '_builtin' => false
                             );
-
+						
+						  // $argsTax=array();
 						  $output = 'objects';
                           $operator = 'or';
 
@@ -172,9 +173,11 @@ function make_s_dictionary() {
 		$s_main_term = get_post_meta($s_post->ID, '_meta_data_syn', true); 
 		list($s_main_term_id,$s_main_term_taxonomy) = explode(":", $s_main_term, 2);
 		$s_terms = get_the_terms($s_post->ID, $s_main_term_taxonomy);
-		foreach($s_terms as $s_term) {
-			$s_dict[$s_term->term_id] = array($s_main_term_id, $s_main_term_taxonomy);
-		}
+      	if ($s_terms) {
+			foreach($s_terms as $s_term) {
+				$s_dict[$s_term->term_id] = array($s_main_term_id, $s_main_term_taxonomy);
+			}
+        }
 	}
 	return $s_dict;
 }
@@ -184,21 +187,25 @@ function new_tax_save($post_id) {
 		if ($syn_dict = make_s_dictionary()) {
 			$s_terms = get_the_terms($post_id, get_taxonomies(array('public'=>true,'_builtin' => false),'names','or'));
 			$add_term = array();
-			foreach($s_terms as $s_term) {
-				if(array_key_exists($s_term->term_id, $syn_dict)) { //если есть совпадение - добавляем новую
-					$t_id = $syn_dict[$s_term->term_id][0];
-					$t_tax = $syn_dict[$s_term->term_id][1];
-				} else { //если нет - оставляем категорию как есть - в составе категорий
-					$t_id = $s_term->term_id;
-					$t_tax = $s_term->taxonomy;
+			if ($s_terms) {
+				foreach($s_terms as $s_term) {
+					if(array_key_exists($s_term->term_id, $syn_dict)) { //если есть совпадение - добавляем новую
+						$t_id = $syn_dict[$s_term->term_id][0];
+						$t_tax = $syn_dict[$s_term->term_id][1];
+					} else { //если нет - оставляем категорию как есть - в составе категорий
+						$t_id = $s_term->term_id;
+						$t_tax = $s_term->taxonomy;
+					}
+					if (!array_key_exists($t_tax, $add_term)) $add_term[$t_tax] = array();
+					settype($t_id, "integer"); // обязательно!!
+					$add_term[$t_tax][] = $t_id;
 				}
-				if (!array_key_exists($t_tax, $add_term)) $add_term[$t_tax] = array();
-				settype($t_id, "integer");
-				$add_term[$t_tax][] = $t_id;
 			}
-			//вставляем список категорий с заменой предыдущих (false)	
-			foreach ($add_term AS $a_term_name => $a_term) {
-				 wp_set_post_terms($post_id, $a_term, $a_term_name);
+			//вставляем список категорий с заменой предыдущих (false)
+			if ($add_term) {
+				foreach ($add_term AS $a_term_name => $a_term) {
+					 wp_set_post_terms($post_id, $a_term, $a_term_name);
+				}
 			}
 		}
 	}
@@ -226,10 +233,27 @@ function tsc_settings() {
 	<?php
 	//перебираем все посты, применяем к ним заменялку рубрик
 	if (isset($_POST['tsc_apply']) && check_admin_referer('meta_action_syn1', 'meta_nonce_syn1')) {
-		$posts = get_posts(array('post_type'=>'post','nopaging'=>true,'post_status '=>'any'));
-		foreach($posts as $post) {
-			new_tax_save($post->ID);
+		$posts_draft = get_posts(array('post_type'=>'post','nopaging'=>true,'post_status'=>'draft'));
+		$posts_publish = get_posts(array('post_type'=>'post','nopaging'=>true,'post_status'=>'publish'));
+		$i = 0;
+		echo '<div>All clear! Begining...</div>';
+		$posts = $posts_draft;
+		if ($posts) {
+			foreach($posts as $post) {
+				new_tax_save($post->ID);
+				// echo '<div>POST->'.$post->ID.' is checked...</div>';
+				$i++;
+			}
 		}
+		$posts = $posts_publish;
+		if ($posts) {
+			foreach($posts as $post) {
+				new_tax_save($post->ID);
+				// echo '<div>POST->'.$post->ID.' is checked...</div>';
+				$i++;
+			}
+		}
+		echo '<div><b>Total: '.$i.' posts checked</b></div>';
 	}
 }
 
