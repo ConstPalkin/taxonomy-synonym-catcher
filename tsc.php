@@ -3,12 +3,12 @@
 Plugin Name: Casepress taxonomy synonyms catcher
 Description: Casepress taxonomy synonyms catcher
 Author: ConstPalkin
-Version: 1.1.3
+Version: 1.1.4
 Author URI: http://casepress.org/
 */
 
 // -------------------------------------------регистрация нового типа поста - Синонимы
-$catcher_version = '1.1.3';
+$catcher_version = '1.1.4';
 add_action('init', 'cptui_register_my_cpt_tsc');
 function cptui_register_my_cpt_tsc() {
 register_post_type('cp_synonyms', array(
@@ -214,7 +214,10 @@ function new_tax_save($post_id) {
 // кнопочка в админ-панели для обновления всех рубрик
 add_action( 'admin_menu', 'tsc_plugin_menu' );
 function tsc_plugin_menu() {
-	add_menu_page( 'Taxonomy Synonyms Catcher', 'TSC', 'manage_options', 'tsc_main_menu', 'tsc_settings' );
+	//отдельный пункт меню
+	/*add_menu_page( 'Taxonomy Synonyms Catcher', 'TSC', 'manage_options', 'tsc_main_menu', 'tsc_settings' );*/
+	//пункт подменю
+	add_submenu_page( 'edit.php?post_type=cp_synonyms', 'Taxonomy Synonyms Catcher', '<b>Массово!</b>', 'manage_options', 'tsc-settings', 'tsc_settings' );
 }
 function tsc_settings() {
 	global $catcher_version;
